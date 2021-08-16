@@ -6,7 +6,7 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # load libraries
 library(maplet)
-library(tidyverse)
+library(dplyr)
 
 #### Global Parameters ----
 
@@ -14,7 +14,7 @@ library(tidyverse)
 pw <- "Cysteine, methionine, SAM, taurine metabolism" 
 # maximum missingness allowed for normalization
 max_miss_norm <- 0.2
-# maximum missigness allowed per group
+# maximum missingness allowed per grade
 max_miss <- 0.85
 # significance level
 alpha <- 0.05
@@ -49,38 +49,52 @@ diff_analysis_tau <- function(D, outvar, name, alpha) {
 
 #### Load Data ----
 
+# data file
 file <- "data/Glioma_Metabolon_MTfriendly.xlsx"
 
 D <- mt_reporting_heading(heading = "Load Data", lvl = 1) %>%
+  # load data sheet
   mt_load_xls(file=file, sheet="data", samples_in_rows=T, id_col="SAMPLE_NAME") %>% 
+  # load sample annotation sheet
   mt_anno_xls(file=file, sheet="sampleinfo", anno_type="samples", anno_id_col="SAMPLE_NAME") %>% 
+  # load metabolite annotation sheet
   mt_anno_xls(file=file, sheet="metinfo", anno_type="features", anno_id_col="BIOCHEMICAL", data_id_col="name") %>%
+  # convert grade to numeric
   mt_anno_mutate(anno_type = "samples", col_name = "GRADE.tau", term = case_when(GRADE=="II"~2,
                                                                                  GRADE=="III"~3,
                                                                                  GRADE=="IV"~4)) %>%
+  # convert run day variable to factor for batch correction
   mt_anno_mutate(anno_type = "samples",col_name = "RUN.DAY", term = as.factor(RUN.DAY))
 
 #### Preprocessing ----
 
 D <- D %>%
   mt_reporting_heading(heading="Preprocessing", lvl=1) %>%
+  # sample boxplots before batch correction
   mt_plots_sample_boxplot(color=RUN.DAY, title='before batch correction - RUN DAY',plot_logged=T) %>%
-  mt_plots_sample_boxplot(color=Group, title='before batch correction - Group',plot_logged=T) %>%
+  mt_plots_sample_boxplot(color=Group, title='before batch correction - Group',plot_logged=T) %>% 
+  # batch correction
   mt_pre_batch_median(batch_col = "RUN.DAY") %>%
+  # sample boxplots after batch correction
   mt_plots_sample_boxplot(color=RUN.DAY, title='after batch correction - RUN DAY',plot_logged=T) %>%
   mt_plots_sample_boxplot(color=Group, title='after batch correction - Group',plot_logged=T) %>%
+  # normalization
   mt_pre_norm_quot(feat_max = max_miss_norm) %>% 
   mt_plots_dilution_factor(in_col = "Group") %>%
+  # sample boxplots after normalization
   mt_plots_sample_boxplot(color=RUN.DAY, title='after normalization - RUN DAY',plot_logged=T) %>%
   mt_plots_sample_boxplot(color=Group, title='after normalization - Group', plot_logged=T) %>%
+  # log transformation
   mt_pre_trans_log()
 
 #### Filtering ----
 
 D <- D %>%
   mt_reporting_heading(heading = "Select Cysteine Pathway", lvl=1) %>%
+  # keep only metabolites in cysteine pathway
   mt_modify_filter_features(filter = SUB.PATHWAY %in% pw) %>%
   mt_reporting_heading(heading = "Filtering", lvl=1) %>%
+  # filter out metabolites with too many missing values (if any)
   mt_plots_missingness(feat_max=max_miss) %>%
   mt_pre_filter_missingness(feat_max=max_miss, group_col = "Group") %>%
   mt_plots_missingness(feat_max=max_miss)
@@ -89,16 +103,17 @@ D <- D %>%
 
 D <- D %>%
   mt_reporting_heading(heading = "Differential Analysis - metabolites", lvl=1) %>%
+  # perform differential analysis
   diff_analysis_tau(outvar="GRADE.tau", name="Grade II vs. III vs. IV", alpha=alpha)
 
 #### Write to File ----
 
-# write report to html
 D %>%
+  # write report to html
   mt_reporting_html(file="Glioma_GradeDifferentialAnalysis_CysteinePathway.html", 
                     title="Analysis Pipeline")
 
-# write statistical results to file
 D %>%  
+  # write statistical results to file
   mt_write_stats(file = "DifferentialAnalysisResults.xlsx")
 
