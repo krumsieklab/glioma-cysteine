@@ -1,6 +1,6 @@
 #### Initialize ----
 
-zap()
+rm(list = ls())
 # set working directory
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
