@@ -19,7 +19,38 @@ max_miss <- 0.85
 # significance level
 alpha <- 0.05
 
-##### Define Analysis Functions ----
+##### Define Functions ----
+
+# Downloads files from the web and verifies their checksum. 
+# Will use local copy in current directory, if it exists
+load.web.file <- function(
+  url, md5sum, outfile, zipfile = F) {
+  # check if local file exists
+  if (file.exists(outfile)) {
+    # verify checksum
+    realsum <- tools::md5sum(outfile)[[1]]
+    if (realsum != md5sum) stop(sprintf("Local file %s has wrong checksum: %s", outfile, realsum))
+    # do not delete wrong file, it was already here before
+    
+  } else {
+    if(zipfile){
+      # download file
+      temp <- tempfile()
+      download.file(url,temp)
+      unzip(zipfile = temp, files = outfile, exdir = ".")
+    } else {
+      # download file
+      download.file(url, outfile)
+    }
+    # verify checksum
+    realsum <- tools::md5sum(outfile)[[1]]
+    if (realsum != md5sum) { 
+      # delete wrong file
+      unlink(outfile)
+      stop(sprintf("Remote file %s has wrong checksum: %s", url, realsum))
+    }
+  }
+}
 
 diff_analysis_tau <- function(D, outvar, name, alpha) {
   D %>%
@@ -49,8 +80,14 @@ diff_analysis_tau <- function(D, outvar, name, alpha) {
 
 #### Load Data ----
 
-# data file
-file <- "data/Glioma_Metabolon_MTfriendly.xlsx"
+# file name
+file <- "Chinnaiyan_et_al_Metabolon_original.xlsx"
+# download metabolomics data from Figshare
+load.web.file(
+  url="https://figshare.com/ndownloader/files/30552759?private_link=8d1fea57211b11801f52",
+  md5sum = "42df0ca798ac4cdefe23c8a3f58e71cf",
+  outfile = file
+)
 
 D <- mt_reporting_heading(heading = "Load Data", lvl = 1) %>%
   # load data sheet
@@ -59,7 +96,7 @@ D <- mt_reporting_heading(heading = "Load Data", lvl = 1) %>%
   mt_anno_xls(file=file, sheet="sampleinfo", anno_type="samples", anno_id_col="SAMPLE_NAME") %>% 
   # load metabolite annotation sheet
   mt_anno_xls(file=file, sheet="metinfo", anno_type="features", anno_id_col="BIOCHEMICAL", data_id_col="name") %>%
-  # convert grade to numeric
+  # convert grade to numeric for analysis
   mt_anno_mutate(anno_type = "samples", col_name = "GRADE.tau", term = case_when(GRADE=="II"~2,
                                                                                  GRADE=="III"~3,
                                                                                  GRADE=="IV"~4)) %>%
@@ -108,12 +145,12 @@ D <- D %>%
 
 #### Write to File ----
 
-D %>%
+D %<>%
   # write report to html
   mt_reporting_html(file="Glioma_GradeDifferentialAnalysis_CysteinePathway.html", 
                     title="Analysis Pipeline")
 
-D %>%  
+D %<>%  
   # write statistical results to file
   mt_write_stats(file = "DifferentialAnalysisResults.xlsx")
 
