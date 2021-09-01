@@ -84,7 +84,7 @@ diff_analysis_tau <- function(D, outvar, name, alpha) {
 file <- "Chinnaiyan_et_al_Metabolon_original.xlsx"
 # download metabolomics data from Figshare
 load.web.file(
-  url="https://figshare.com/ndownloader/files/30552759?private_link=8d1fea57211b11801f52",
+  url="https://figshare.com/ndownloader/files/30552759",
   md5sum = "42df0ca798ac4cdefe23c8a3f58e71cf",
   outfile = file
 )
